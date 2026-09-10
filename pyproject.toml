@@ -1,0 +1,38 @@
+# [build-system]
+# requires = ["hatchling"]
+# build-backend = "hatchling.build"
+
+[project]
+name = "GroundedSearch"
+version = "1.0"
+description = "A Prelexity Style Search Engine"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "psycopg[binary,pool]>=3.3.5",
+    "pydantic-settings>=2.15.0",
+]
+
+[tool.fastapi]
+entrypoint = "app.main:app"
+
+[tool.ruff]
+line-length = 90
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "ASYNC"]
+
+[tool.pyright]
+include = ["app", "tests"]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.413",
+    "pytest>=9.1.1",
+    "ruff>=0.16.6",
+]
