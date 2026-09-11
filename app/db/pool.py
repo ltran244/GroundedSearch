@@ -4,8 +4,8 @@ from app.config import settings
 
 # open=False so importing this module never tries to reach the database.
 pool = ConnectionPool(
-    conninfo=settings.Database_URL(),
-    min_size=1,
+    conninfo=settings.database_url,
+    min_size=0,
     max_size=10,
     open=False,
 )

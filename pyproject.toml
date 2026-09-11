@@ -5,6 +5,7 @@
 [project]
 name = "GroundedSearch"
 version = "1.0"
+requires-python = ">=3.13"
 description = "A Prelexity Style Search Engine"
 dependencies = [
     "fastapi[standard]>=0.141.1",
@@ -29,6 +30,7 @@ typeCheckingMode = "standard"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [dependency-groups]
 dev = [

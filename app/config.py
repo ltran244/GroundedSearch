@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     database_password: str
     # To load environment variables from the .env file
     model_config = SettingsConfigDict(env_file=".env")
-
-    def Database_URL(self) -> str:
+    
+    @property
+    def database_url(self) -> str:
         return f"postgresql://{self.database_user}:{self.database_password}@{self.database_host}:{self.database_port}/{self.database_name}"
-
 
 settings = Settings()
