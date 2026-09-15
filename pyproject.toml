@@ -40,4 +40,5 @@ dev = [
     "pyright>=1.1.413",
     "pytest>=9.1.1",
     "ruff>=0.16.6",
+    "yoyo-migrations>=9.0.0",
 ]
