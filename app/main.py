@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.health import health_router
+from app.api.research import research_router
 from app.db.pool import pool
 
 
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(health_router)
+app.include_router(research_router)
 
 
 @app.get("/")

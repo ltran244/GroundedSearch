@@ -1,4 +1,5 @@
 from psycopg.conninfo import make_conninfo
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +11,11 @@ class Settings(BaseSettings):
     database_port: int
     database_user: str
     database_password: str
+    google_api_key: SecretStr | None = None
+    brave_search_api_key: SecretStr | None = None
+    brave_max_concurrent_requests: int = Field(default=4, ge=1)
+    llm_model: str = "gemini-3.1-flash-lite"
+    llm_max_concurrent_requests: int = Field(default=4, ge=1)
     # To load environment variables from the .env file
     model_config = SettingsConfigDict(env_file=".env")
 
