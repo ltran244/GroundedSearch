@@ -38,9 +38,15 @@ pythonpath = ["."]
 markers = [
     "integration: uses the real application and requires the test database",
 ]
+filterwarnings = [
+    # Raised by starlette's own testclient.py (still present in starlette 1.6.0),
+    # not by our code. Remove once starlette stops using the alias.
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.13.0",
     "pyright>=1.1.413",
     "pytest>=9.1.1",
     "ruff>=0.16.6",

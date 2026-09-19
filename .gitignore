@@ -2,6 +2,7 @@ CLAUDE.md
 PLAN.md
 ROADMAP.md
 AGENTS.md
+.uv-cache/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

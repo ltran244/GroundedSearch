@@ -1,12 +1,17 @@
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from psycopg import Error as PsycopgError
 from pydantic import BaseModel
 
-from app.db.pool import pool
+class ErrorResponse(BaseModel):
+    detail: str
 
-health_router = APIRouter()
+from app.db.pool import pool
+from app.api.responses import DATABASE_UNAVAILABLE
+
+health_router = APIRouter(responses=DATABASE_UNAVAILABLE)
 
 
 class HealthResponse(BaseModel):
@@ -15,10 +20,6 @@ class HealthResponse(BaseModel):
 
 class ReadinessResponse(BaseModel):
     status: Literal["ready"]
-
-
-class ErrorResponse(BaseModel):
-    detail: str
 
 
 @health_router.get("/healthz", response_model=HealthResponse)
@@ -30,19 +31,8 @@ def health_check() -> HealthResponse:
 @health_router.get(
     "/readyz",
     response_model=ReadinessResponse,
-    responses={
-        status.HTTP_503_SERVICE_UNAVAILABLE: {
-            "description": "Database unavailable",
-            "model": ErrorResponse,
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Database unavailable"},
-                },
-            },
-        },
-    },
 )
-def readiness_check() -> ReadinessResponse:
+def readiness_check() -> ReadinessResponse | JSONResponse:
     """Check that the application can execute a database query."""
     try:
         with pool.connection(timeout=2) as conn, conn.cursor() as cursor:
@@ -50,7 +40,7 @@ def readiness_check() -> ReadinessResponse:
             cursor.fetchone()
     except PsycopgError as exc:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            status_code=503,
             detail="Database unavailable",
         ) from exc
     return ReadinessResponse(status="ready")

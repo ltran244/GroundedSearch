@@ -55,7 +55,7 @@ def clear_test_database():
 def migrated_test_database():
     subprocess.run(
         [sys.executable, "-m", "app.db.migrate", "--test", "apply", "--batch"],
-        cwd=Path(__file__).resolve().parents[1],
+        cwd=Path(__file__).resolve().parents[2],
         check=True,
     )
 
