@@ -37,3 +37,38 @@ def get_research(job_id: UUID) -> dict[str, str | UUID | None] | None:
                 (job_id,),
             )
             return cursor.fetchone()
+
+
+def save_queries(job_id: UUID, queries: list[str]) -> None:
+    """Save a job's search queries, all of them or none."""
+    with pool_module.pool.connection(timeout=2) as conn:
+        with conn.cursor() as cursor:
+            cursor.executemany(
+                """
+                INSERT INTO search_queries (research_job_id, query, position)
+                VALUES (%s, %s, %s)
+                """,
+                [(job_id, query, position) for position, query in enumerate(queries)],
+            )
+
+
+def mark_job_running(job_id: UUID) -> None:
+    """Mark a job as started, so 'running' means work actually began."""
+    with pool_module.pool.connection(timeout=2) as conn:
+        conn.execute(
+            "UPDATE research_jobs SET status = 'running' WHERE id = %s",
+            (job_id,),
+        )
+
+
+def mark_job_failed(job_id: UUID, message: str) -> None:
+    """Record why a job failed, in its own transaction."""
+    with pool_module.pool.connection(timeout=2) as conn:
+        conn.execute(
+            """
+            UPDATE research_jobs
+            SET status = 'failed', error_message = %s, completed_at = now()
+            WHERE id = %s
+            """,
+            (message, job_id),
+        )

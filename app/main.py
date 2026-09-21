@@ -1,8 +1,8 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 from fastapi.requests import Request
+from fastapi.responses import JSONResponse
 from psycopg import OperationalError
 
 from app.api.health import health_router
@@ -24,6 +24,7 @@ app = FastAPI(
 )
 app.include_router(health_router)
 app.include_router(research_router)
+
 
 @app.exception_handler(OperationalError)
 async def database_unavailable(request: Request, exc: OperationalError) -> JSONResponse:

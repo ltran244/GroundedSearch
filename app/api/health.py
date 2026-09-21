@@ -5,11 +5,13 @@ from fastapi.responses import JSONResponse
 from psycopg import Error as PsycopgError
 from pydantic import BaseModel
 
+from app.api.responses import DATABASE_UNAVAILABLE
+from app.db.pool import pool
+
+
 class ErrorResponse(BaseModel):
     detail: str
 
-from app.db.pool import pool
-from app.api.responses import DATABASE_UNAVAILABLE
 
 health_router = APIRouter(responses=DATABASE_UNAVAILABLE)
 
