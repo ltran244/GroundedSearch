@@ -1,5 +1,5 @@
--- Store generated search queries for each research job.
--- depends: 20260915_01_create_research_jobs
+-- The search queries generated for each research job, in the order generated.
+-- depends: 20260921_01_create_research_jobs
 
 CREATE TABLE search_queries (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -16,16 +16,16 @@ def client():
 
 
 def test_health_does_not_access_database(client):
-    with patch("app.api.health.pool") as pool:
+    with patch("app.api.health.check_database") as check_database:
         response = client.get("/healthz")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
-    pool.connection.assert_not_called()
+    check_database.assert_not_awaited()
 
 
 def test_ready_when_database_responds(client):
-    with patch("app.api.health.pool"):
+    with patch("app.api.health.check_database"):
         response = client.get("/readyz")
 
     assert response.status_code == 200
@@ -33,8 +33,7 @@ def test_ready_when_database_responds(client):
 
 
 def test_not_ready_when_database_is_unavailable(client):
-    with patch("app.api.health.pool") as pool:
-        pool.connection.side_effect = PoolTimeout("unavailable")
+    with patch("app.api.health.check_database", side_effect=PoolTimeout("unavailable")):
         response = client.get("/readyz")
 
     assert response.status_code == 503

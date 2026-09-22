@@ -1,3 +1,5 @@
+-- One row per research question; tracks the job from creation to answer.
+
 CREATE TABLE research_jobs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     query text NOT NULL CHECK (length(trim(query)) > 0),

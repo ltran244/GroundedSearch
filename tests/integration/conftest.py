@@ -1,13 +1,13 @@
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 from psycopg import connect, sql
-from psycopg_pool import ConnectionPool
+from psycopg_pool import AsyncConnectionPool
 
-import app.api.health as health_module
 import app.db.pool as pool_module
 import app.main as main_module
 from app.config import settings
@@ -71,7 +71,7 @@ def clean_test_database(migrated_test_database):
 
 @pytest.fixture
 def integration_pool(monkeypatch, clean_test_database):
-    pool = ConnectionPool(
+    pool = AsyncConnectionPool(
         conninfo=settings.test_database_url,
         min_size=0,
         max_size=10,
@@ -81,20 +81,26 @@ def integration_pool(monkeypatch, clean_test_database):
     # Replace each imported reference with the same real, isolated test pool.
     monkeypatch.setattr(pool_module, "pool", pool)
     monkeypatch.setattr(main_module, "pool", pool)
-    monkeypatch.setattr(health_module, "pool", pool)
-    try:
-        yield pool
-    finally:
-        pool.close()
+    # The startup check would otherwise call Google on every integration test.
+    monkeypatch.setattr(main_module, "check_gemini", AsyncMock())
+    # Opened and closed by the app's lifespan, inside TestClient's event loop:
+    # an async pool can only be used from the loop that opened it.
+    yield pool
 
 
 @pytest.fixture
 def integration_client(integration_pool):
     with TestClient(main_module.app) as client:
         assert not integration_pool.closed
+
         # Fail early if the configured test database cannot be reached.
-        with integration_pool.connection(timeout=5) as conn:
-            row = conn.execute("SELECT current_database()").fetchone()
-            assert row == (settings.test_database_name,)
+        # client.portal runs a coroutine on the event loop that owns the pool.
+        async def current_database():
+            async with integration_pool.connection(timeout=5) as conn:
+                cursor = await conn.execute("SELECT current_database()")
+                return await cursor.fetchone()
+
+        assert client.portal is not None
+        assert client.portal.call(current_database) == (settings.test_database_name,)
         yield client
     assert integration_pool.closed

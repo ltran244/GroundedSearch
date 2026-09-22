@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,16 +8,32 @@ from psycopg import OperationalError
 
 from app.api.health import health_router
 from app.api.research import research_router
-from app.db.pool import pool
+from app.db.pool import check_database, pool
+from app.llm.client import check_gemini
+
+logger = logging.getLogger(__name__)
+
+
+async def check_dependencies() -> None:
+    """Warn at startup if a dependency is down, but never stop the app starting."""
+    try:
+        await check_database()
+    except Exception as exc:
+        logger.warning("Startup check: database unavailable (%s)", exc)
+    try:
+        await check_gemini()
+    except Exception as exc:
+        logger.warning("Startup check: Gemini unavailable (%s)", exc)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    pool.open()
+    await pool.open()
+    await check_dependencies()
     try:
         yield
     finally:
-        pool.close()
+        await pool.close()
 
 
 app = FastAPI(

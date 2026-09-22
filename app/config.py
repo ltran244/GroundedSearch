@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     google_api_key: SecretStr | None = None
     brave_search_api_key: SecretStr | None = None
     brave_max_concurrent_requests: int = Field(default=4, ge=1)
+    brave_results_per_query: int = Field(default=5, ge=1, le=20)
     llm_model: str = "gemini-3.5-flash-lite"
     llm_max_concurrent_requests: int = Field(default=4, ge=1)
     # To load environment variables from the .env file

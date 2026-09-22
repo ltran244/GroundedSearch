@@ -6,7 +6,7 @@ from psycopg import Error as PsycopgError
 from pydantic import BaseModel
 
 from app.api.responses import DATABASE_UNAVAILABLE
-from app.db.pool import pool
+from app.db.pool import check_database
 
 
 class ErrorResponse(BaseModel):
@@ -25,7 +25,7 @@ class ReadinessResponse(BaseModel):
 
 
 @health_router.get("/healthz", response_model=HealthResponse)
-def health_check() -> HealthResponse:
+async def health_check() -> HealthResponse:
     """Check that the application is running without accessing the database."""
     return HealthResponse(status="ok")
 
@@ -34,12 +34,10 @@ def health_check() -> HealthResponse:
     "/readyz",
     response_model=ReadinessResponse,
 )
-def readiness_check() -> ReadinessResponse | JSONResponse:
+async def readiness_check() -> ReadinessResponse | JSONResponse:
     """Check that the application can execute a database query."""
     try:
-        with pool.connection(timeout=2) as conn, conn.cursor() as cursor:
-            cursor.execute("SELECT 1;")
-            cursor.fetchone()
+        await check_database()
     except PsycopgError as exc:
         raise HTTPException(
             status_code=503,

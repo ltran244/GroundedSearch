@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from psycopg import OperationalError
 
-from app.llm.client import GeneratedQueries
+from app.llm.models import GeneratedQueries
 from app.main import app
 
 
@@ -17,11 +17,12 @@ def client():
 
 @pytest.fixture
 def generated_queries():
-    """Stand in for the Gemini call so no test spends API credits."""
+    """Stand in for the Gemini and Brave calls so no test spends API credits."""
     queries = GeneratedQueries(queries=["query one", "query two", "query three"])
     with (
         patch("app.llm.client.get_client"),
         patch("app.llm.client.generate_search_query", return_value=queries) as generate,
+        patch("app.search.brave.search_all", return_value=[]),
         patch("app.db.research.mark_job_running"),
         patch("app.db.research.mark_job_failed"),
     ):
