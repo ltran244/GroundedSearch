@@ -2,7 +2,7 @@ from google import genai
 
 from app.config import settings
 from app.llm.models import GeneratedQueries
-from app.llm.prompts import QUERY_GENERATION_PROMPT
+from app.llm.prompts import ANSWER_GENERATION_PROMPT, QUERY_GENERATION_PROMPT
 
 MIN_QUERIES = 3
 MAX_QUERIES = 5
@@ -63,15 +63,27 @@ async def generate_search_query(client: genai.Client, query: str) -> GeneratedQu
     return GeneratedQueries(queries=unique[:MAX_QUERIES])
 
 
-async def generate_answer(client: genai.Client, question: str, sources: list[str]) -> str:
-    """Write an answer to the question from the extracted source texts.
+class AnswerGenerationError(RuntimeError):
+    """Raised when Gemini fails to make an answer."""
 
-    1. Number the sources [1], [2], ... in the prompt, in the order passed in.
-    2. Instruct the model to answer only from those sources and to cite them
-       with [n] markers after each claim. That numbering is what ties a claim
-       back to a source row.
-    3. Needs a synthesis prompt in app/llm/prompts.py next to the query one.
-    4. Same guards as generate_search_query: raise QueryGenerationError-style
-       errors on an empty or blocked response.
-    """
-    raise NotImplementedError
+
+async def generate_answer(client: genai.Client, question: str, sources: list[str]) -> str:
+    """Write an answer to the question from the extracted source texts."""
+    if not sources:
+        raise QueryGenerationError("Cannot generate an answer without sources")
+
+    numbered_sources = "\n\n".join(
+        f"[{number}] {source}" for number, source in enumerate(sources, start=1)
+    )
+    prompt_input = f"Question: {question}\n\nSources:\n{numbered_sources}"
+
+    interaction = await client.aio.interactions.create(
+        model=settings.llm_model,
+        input=prompt_input,
+        system_instruction=ANSWER_GENERATION_PROMPT,
+        stream=False,
+    )
+    answer = interaction.output_text  # pyright: ignore[reportAttributeAccessIssue]
+    if not answer or not answer.strip():
+        raise AnswerGenerationError("Gemini returned no answer")
+    return answer.strip()

@@ -4,6 +4,7 @@ import app.db.research as research_db
 import app.db.sources as sources_db
 import app.llm.client as llm_client
 from app.search import brave
+from app.web import fetcher
 
 
 async def run_research(job_id: UUID) -> None:
@@ -27,26 +28,31 @@ async def run_research(job_id: UUID) -> None:
 
         results = await brave.search_all(queries)
         source_ids = await sources_db.save_sources(job_id, results)
-        # 3. Fetch each page         app/web/fetcher.py
-        #    pages = await fetcher.fetch_pages(list(source_ids))
-        #    The HTML stays in memory; only the extracted text is saved.
-        #
-        # 4. Extract readable text   app/web/extractor.py
-        #    texts = extract_text(html) per page, skipping None
-        #    await save_content(source_ids[url], text) for each
-        #
+        pages = await fetcher.fetch_pages(list(source_ids))
+        await sources_db.save_contents(
+            {source_ids[url]: text for url, text in pages.items()}
+        )
+
         # 5. Write the answer        app/llm/client.py
         #    answer = await llm_client.generate_answer(client, job["query"], texts)
         #
+        answer = await llm_client.generate_answer(
+            llm_client.get_client(), str(job["query"]), list(pages.values())
+        )
         # 6. Finish                  app/db/research.py
         #    await research_db.complete_job(job_id, answer)
+        await research_db.complete_job(job_id, answer)
     except Exception as exc:
         if isinstance(exc, llm_client.QueryGenerationError):
             message = "Search query generation failed"
-        else:
-            message = "Could not save generated queries"
-        if isinstance(exc, brave.BraveSearchError):
+        elif isinstance(exc, brave.BraveSearchError):
             message = "Brave search failed"
+        elif isinstance(exc, fetcher.FetchError):
+            message = "No readable sources"
+        elif isinstance(exc, llm_client.AnswerGenerationError):
+            message = "Answer generation failed"
+        else:
+            message = "Unknown error"
         try:
             await research_db.mark_job_failed(job_id, message)
         except Exception:

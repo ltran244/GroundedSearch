@@ -75,9 +75,13 @@ async def mark_job_failed(job_id: UUID, message: str) -> None:
 
 
 async def complete_job(job_id: UUID, answer: str) -> None:
-    """Save the answer and mark the job completed, in one transaction.
-
-    UPDATE research_jobs SET answer, status = 'completed', completed_at = now().
-    Both change together so a job is never 'completed' without its answer.
-    """
-    raise NotImplementedError
+    """Save the answer and mark the job done."""
+    async with pool_module.pool.connection(timeout=2) as conn:
+        await conn.execute(
+            """
+            UPDATE research_jobs
+            SET answer = %s, status = 'completed', completed_at = now()
+            WHERE id = %s
+            """,
+            (answer, job_id),
+        )

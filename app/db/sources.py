@@ -50,10 +50,19 @@ async def save_sources(job_id: UUID, results: list[QueryResults]) -> dict[str, U
     return {url: source_ids[url] for url in urls}
 
 
-async def save_content(source_id: UUID, content: str) -> None:
-    """Store the readable text extracted from a source's page.
+async def save_contents(contents: dict[UUID, str]) -> None:
+    """Store extracted text for many sources in one transaction.
 
-    Sets retrieved_at = now() in the same UPDATE. The raw HTML is never saved:
-    it goes from fetch_pages to extract_text in memory.
+    Only pages that produced text are passed in, so sources that could not be
+    fetched or read keep content NULL. Sets retrieved_at = now() alongside.
+    The raw HTML is never saved: it goes from fetch_pages to extract_text in memory.
     """
-    raise NotImplementedError
+    if not contents:
+        return
+    async with pool_module.pool.connection(timeout=2) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.executemany(
+                "UPDATE sources SET content = %s, retrieved_at = now() WHERE id = %s",
+                # Content first, id second, matching the placeholder order.
+                [(text, source_id) for source_id, text in contents.items()],
+            )

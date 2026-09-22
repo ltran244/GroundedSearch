@@ -35,10 +35,6 @@ def get_client() -> httpx.AsyncClient:
 
 async def search_one(client: httpx.AsyncClient, query: str) -> QueryResults:
     """Search one query; no web results is a valid, empty result."""
-    if not query.strip() or len(query) > 600 or len(query.split()) > 75:
-        raise BraveSearchError(
-            "Search queries must contain 1-600 characters and 1-75 words"
-        )
     try:
         # HTTPX timeouts limit individual I/O waits; this bounds the whole request.
         async with asyncio.timeout(30):
@@ -50,7 +46,6 @@ async def search_one(client: httpx.AsyncClient, query: str) -> QueryResults:
                     "result_filter": "web",
                     "extra_snippets": "true",
                     "text_decorations": "false",
-                    # Preserve technical terms and names in generated queries.
                     "spellcheck": "false",
                     "safesearch": "moderate",
                 },
