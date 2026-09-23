@@ -15,14 +15,29 @@ def client():
     return TestClient(app)
 
 
+FAKE_URL = "https://example.com/a"
+FAKE_SOURCE_ID = uuid4()
+FAKE_TEXT = "Panels convert sunlight into electricity."
+FAKE_ANSWER = "Solar panels convert sunlight into electricity. [1]"
+
+
 @pytest.fixture
 def generated_queries():
-    """Stand in for the Gemini and Brave calls so no test spends API credits."""
+    """Stand in for every step of run_research that leaves the process.
+
+    Any new external call in run_research needs a patch here too, or these
+    tests will quietly spend API credits and hit the real database.
+    """
     queries = GeneratedQueries(queries=["query one", "query two", "query three"])
     with (
         patch("app.llm.client.get_client"),
         patch("app.llm.client.generate_search_query", return_value=queries) as generate,
         patch("app.search.brave.search_all", return_value=[]),
+        patch("app.db.sources.save_sources", return_value={FAKE_URL: FAKE_SOURCE_ID}),
+        patch("app.web.fetcher.fetch_pages", return_value={FAKE_URL: FAKE_TEXT}),
+        patch("app.db.sources.save_contents"),
+        patch("app.llm.client.generate_answer", return_value=FAKE_ANSWER),
+        patch("app.db.research.complete_job"),
         patch("app.db.research.mark_job_running"),
         patch("app.db.research.mark_job_failed"),
     ):
@@ -42,6 +57,8 @@ def test_post_research_creates_job_and_runs_pipeline(client, generated_queries):
         patch("app.db.research.post_research", return_value=job_id) as post_research,
         patch("app.db.research.get_research", return_value=job),
         patch("app.db.research.save_queries") as save_queries,
+        patch("app.db.sources.save_contents") as save_contents,
+        patch("app.db.research.complete_job") as complete_job,
     ):
         response = client.post(
             "/api/v1/research", json={"query": "How do solar panels work?"}
@@ -50,9 +67,12 @@ def test_post_research_creates_job_and_runs_pipeline(client, generated_queries):
     assert response.status_code == 200
     assert response.json() == {**job, "id": str(job_id)}
     post_research.assert_called_once_with("How do solar panels work?")
-    save_queries.assert_called_once_with(
+    save_queries.assert_awaited_once_with(
         job_id, ["query one", "query two", "query three"]
     )
+    # The pipeline ran to the end: extracted text saved, answer stored.
+    save_contents.assert_awaited_once_with({FAKE_SOURCE_ID: FAKE_TEXT})
+    complete_job.assert_awaited_once_with(job_id, FAKE_ANSWER)
 
 
 def test_post_research_requires_query(client, generated_queries):

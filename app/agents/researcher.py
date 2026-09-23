@@ -32,15 +32,9 @@ async def run_research(job_id: UUID) -> None:
         await sources_db.save_contents(
             {source_ids[url]: text for url, text in pages.items()}
         )
-
-        # 5. Write the answer        app/llm/client.py
-        #    answer = await llm_client.generate_answer(client, job["query"], texts)
-        #
         answer = await llm_client.generate_answer(
             llm_client.get_client(), str(job["query"]), list(pages.values())
         )
-        # 6. Finish                  app/db/research.py
-        #    await research_db.complete_job(job_id, answer)
         await research_db.complete_job(job_id, answer)
     except Exception as exc:
         if isinstance(exc, llm_client.QueryGenerationError):
@@ -56,6 +50,5 @@ async def run_research(job_id: UUID) -> None:
         try:
             await research_db.mark_job_failed(job_id, message)
         except Exception:
-            # Recording the failure must not replace the original error.
             pass
         raise

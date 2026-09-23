@@ -38,7 +38,10 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "integration: uses the real application and requires the test database",
+    "live: calls the real Gemini and Brave APIs; costs credits, run on purpose",
 ]
+# Live tests are opt-in: `make test-live`, or any explicit -m on the command line.
+addopts = ["-m", "not live"]
 filterwarnings = [
     # Raised by starlette's own testclient.py (still present in starlette 1.6.0),
     # not by our code. Remove once starlette stops using the alias.

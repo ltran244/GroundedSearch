@@ -3,6 +3,8 @@ PLAN.md
 ROADMAP.md
 AGENTS.md
 .uv-cache/
+htmlcov/
+.coverage
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
