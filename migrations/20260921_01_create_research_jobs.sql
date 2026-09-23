@@ -8,5 +8,6 @@ CREATE TABLE research_jobs (
     answer text,
     error_message text,
     created_at timestamptz NOT NULL DEFAULT now(),
+    started_at timestamptz,
     completed_at timestamptz
 );

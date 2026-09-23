@@ -18,10 +18,8 @@ async def post_research(query: str, answer: str | None = None) -> UUID:
                 (query, answer),
             )
             row = await cursor.fetchone()
-            if row is None:
-                raise RuntimeError("Research insert did not return an ID")
-            job_id = row[0]
-    return job_id
+            assert row is not None
+            return row[0]
 
 
 async def get_research(job_id: UUID) -> dict[str, str | UUID | None] | None:
@@ -53,10 +51,17 @@ async def save_queries(job_id: UUID, queries: list[str]) -> None:
 
 
 async def mark_job_running(job_id: UUID) -> None:
-    """Mark a job as started, so 'running' means work actually began."""
+    """Mark a job as started, so 'running' means work actually began.
+
+    started_at records when, which is what any stranded-job cleanup measures from.
+    """
     async with pool_module.pool.connection(timeout=2) as conn:
         await conn.execute(
-            "UPDATE research_jobs SET status = 'running' WHERE id = %s",
+            """
+            UPDATE research_jobs
+            SET status = 'running', started_at = now()
+            WHERE id = %s
+            """,
             (job_id,),
         )
 
@@ -85,3 +90,17 @@ async def complete_job(job_id: UUID, answer: str) -> None:
             """,
             (answer, job_id),
         )
+
+
+async def get_queries(job_id: UUID) -> list[str]:
+    """A job's generated search queries, in the order they were generated."""
+    async with pool_module.pool.connection(timeout=2) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                """
+                SELECT query FROM search_queries
+                WHERE research_job_id = %s ORDER BY position
+                """,
+                (job_id,),
+            )
+            return [row[0] for row in await cursor.fetchall()]

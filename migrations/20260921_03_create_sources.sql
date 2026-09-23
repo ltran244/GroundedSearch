@@ -9,6 +9,7 @@ CREATE TABLE sources (
     -- NULL until the page is fetched and its text extracted. Stays NULL if the
     -- fetch fails (paywall, 404, blocked) or the page has no readable text.
     content text,
+    citation_number integer,
     retrieved_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (research_job_id, url)

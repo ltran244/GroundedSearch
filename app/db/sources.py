@@ -1,4 +1,7 @@
+from typing import Any
 from uuid import UUID
+
+from psycopg.rows import dict_row
 
 import app.db.pool as pool_module
 from app.search.models import QueryResults
@@ -50,19 +53,35 @@ async def save_sources(job_id: UUID, results: list[QueryResults]) -> dict[str, U
     return {url: source_ids[url] for url in urls}
 
 
-async def save_contents(contents: dict[UUID, str]) -> None:
-    """Store extracted text for many sources in one transaction.
-
-    Only pages that produced text are passed in, so sources that could not be
-    fetched or read keep content NULL. Sets retrieved_at = now() alongside.
-    The raw HTML is never saved: it goes from fetch_pages to extract_text in memory.
-    """
-    if not contents:
-        return
+async def save_contents(sources: list[tuple[UUID, str]]) -> None:
+    """Store text and citation numbers for sources."""
     async with pool_module.pool.connection(timeout=2) as conn:
         async with conn.cursor() as cursor:
             await cursor.executemany(
-                "UPDATE sources SET content = %s, retrieved_at = now() WHERE id = %s",
-                # Content first, id second, matching the placeholder order.
-                [(text, source_id) for source_id, text in contents.items()],
+                """
+                UPDATE sources
+                SET content = %s, citation_number = %s, retrieved_at = now()
+                WHERE id = %s
+                """,
+                [
+                    (text, number, source_id)
+                    for number, (source_id, text) in enumerate(sources, start=1)
+                ],
             )
+
+
+async def get_sources(job_id: UUID) -> list[dict[str, Any]]:
+    """A job's sources, cited ones first in citation order.
+    """
+    async with pool_module.pool.connection(timeout=2) as conn:
+        async with conn.cursor(row_factory=dict_row) as cursor:
+            await cursor.execute(
+                """
+                SELECT citation_number AS number, title, url, snippet
+                FROM sources
+                WHERE research_job_id = %s
+                ORDER BY citation_number NULLS LAST, rank, url
+                """,
+                (job_id,),
+            )
+            return await cursor.fetchall()

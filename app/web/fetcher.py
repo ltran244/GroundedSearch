@@ -41,14 +41,10 @@ async def fetch_pages(urls: list[str]) -> dict[str, str]:
                             html = body.decode(
                                 response.encoding or "utf-8", errors="replace"
                             )
-                            # Trafilatura is CPU work; a thread keeps it from
-                            # blocking the event loop and the other downloads.
                             text = await asyncio.to_thread(extractor.extract_text, html)
                             if text is not None:
                                 pages[url] = text
                 except Exception:
-                    # Any escaping exception would make the TaskGroup cancel
-                    # every other download; a broken page only costs itself.
                     pass
 
         async with asyncio.TaskGroup() as group:

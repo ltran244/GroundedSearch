@@ -1,7 +1,7 @@
 from google import genai
 
 from app.config import settings
-from app.llm.models import GeneratedQueries
+from app.llm.models import AnswerSource, GeneratedQueries
 from app.llm.prompts import ANSWER_GENERATION_PROMPT, QUERY_GENERATION_PROMPT
 
 MIN_QUERIES = 3
@@ -67,13 +67,17 @@ class AnswerGenerationError(RuntimeError):
     """Raised when Gemini fails to make an answer."""
 
 
-async def generate_answer(client: genai.Client, question: str, sources: list[str]) -> str:
-    """Write an answer to the question from the extracted source texts."""
+async def generate_answer(
+    client: genai.Client, question: str, sources: list[AnswerSource]
+) -> str:
+    """Write an answer to the question from the extracted sources.
+    """
     if not sources:
-        raise QueryGenerationError("Cannot generate an answer without sources")
+        raise AnswerGenerationError("Cannot generate an answer without sources")
 
     numbered_sources = "\n\n".join(
-        f"[{number}] {source}" for number, source in enumerate(sources, start=1)
+        f"[{number}] {source.title}\nURL: {source.url}\n{source.text}"
+        for number, source in enumerate(sources, start=1)
     )
     prompt_input = f"Question: {question}\n\nSources:\n{numbered_sources}"
 
