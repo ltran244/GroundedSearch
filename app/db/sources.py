@@ -54,8 +54,7 @@ async def save_sources(job_id: UUID, results: list[QueryResults]) -> dict[str, U
 
 
 async def save_contents(sources: list[tuple[UUID, str]]) -> None:
-    """Store the extracted text of readable sources, all of them or none.
-    """
+    """Store the extracted text of readable sources, all of them or none."""
     if not sources:
         return
     async with pool_module.pool.connection(timeout=2) as conn:
@@ -71,8 +70,7 @@ async def save_contents(sources: list[tuple[UUID, str]]) -> None:
 
 
 async def set_citation_numbers(source_ids: list[UUID]) -> None:
-    """Number the sources that went into the answer prompt, 1-based.
-    """
+    """Number the sources that went into the answer prompt, 1-based."""
     if not source_ids:
         return
     async with pool_module.pool.connection(timeout=2) as conn:

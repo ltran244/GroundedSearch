@@ -1,12 +1,13 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, StringConstraints
+from redis.exceptions import RedisError
 
 import app.db.research as research_db
 import app.db.sources as sources_db
-from app.agents.researcher import run_research
+import app.queue as job_queue
 from app.api.responses import DATABASE_UNAVAILABLE, RESEARCH_NOT_FOUND
 
 research_router = APIRouter(
@@ -42,8 +43,6 @@ class ResearchResponse(BaseModel):
     status: JobStatus
     answer: str | None = None
     error_message: str | None = None
-    # Both fill in as the pipeline progresses, so a client polling this endpoint
-    # can show the searches, then the sources, then the answer.
     search_queries: list[str] = []
     sources: list[SourceResponse] = []
 
@@ -60,12 +59,14 @@ class ResearchCreated(BaseModel):
     status_code=status.HTTP_201_CREATED,
     response_model=ResearchCreated,
 )
-async def research(
-    request: ResearchRequest, background: BackgroundTasks, response: Response
-) -> ResearchCreated:
-    """Create a job and start it; poll GET /research/{job_id} for the answer."""
+async def research(request: ResearchRequest, response: Response) -> ResearchCreated:
+    """Create a job and queue it; poll GET /research/{job_id} for the answer."""
     job_id = await research_db.post_research(request.query)
-    background.add_task(run_research, job_id)
+    try:
+        await job_queue.enqueue_research(job_id)
+    except RedisError:
+        await research_db.mark_job_failed(job_id, "Could not queue job")
+        raise
     response.headers["Location"] = f"/api/v1/research/{job_id}"
     return ResearchCreated(id=job_id, status="pending")
 

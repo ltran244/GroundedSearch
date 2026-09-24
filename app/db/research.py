@@ -3,6 +3,7 @@ from uuid import UUID
 from psycopg.rows import dict_row
 
 import app.db.pool as pool_module
+from app.config import settings
 
 
 async def post_research(query: str, answer: str | None = None) -> UUID:
@@ -104,3 +105,18 @@ async def get_queries(job_id: UUID) -> list[str]:
                 (job_id,),
             )
             return [row[0] for row in await cursor.fetchall()]
+
+
+async def fail_stale_jobs() -> int:
+    """Fail jobs whose worker died, and say how many. Safe to run repeatedly."""
+    async with pool_module.pool.connection(timeout=5) as conn:
+        cursor = await conn.execute(
+            """
+            UPDATE research_jobs
+            SET status = 'failed', error_message = 'Timed out', completed_at = now()
+            WHERE status = 'running'
+              AND started_at < now() - make_interval(mins => %s)
+            """,
+            (settings.stale_job_minutes,),
+        )
+        return cursor.rowcount

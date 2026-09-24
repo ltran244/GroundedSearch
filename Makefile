@@ -1,4 +1,4 @@
-.PHONY: dev lint format check test test-unit test-integration db db-down all
+.PHONY: dev worker lint format check test test-unit test-integration db db-down all
 .PHONY: coverage coverage-html coverage-live test-live
 .PHONY: migration-new migrate migrate-test migration-status migration-status-test
 .PHONY: migration-rollback migration-rollback-test
@@ -7,6 +7,10 @@ YOYO = uv run python -m app.db.migrate
 
 dev:
 	uv run fastapi dev
+
+# The pipeline runs here now, not in the web process. Needs `make db`.
+worker:
+	uv run arq app.worker.WorkerSettings
 
 db:
 	docker compose up -d db
@@ -59,6 +63,7 @@ test-integration:
 
 # Real Gemini and Brave calls: costs credits. Needs `make db` too.
 test-live:
+	make worker
 	uv run pytest -m live
 
 # --with pulls in pytest-cov for this command only, so it stays out of pyproject.

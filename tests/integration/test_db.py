@@ -144,3 +144,30 @@ def test_mark_job_failed_records_the_message(db):
     assert job is not None
     assert job["status"] == "failed"
     assert job["error_message"] == "Brave search failed"
+
+
+def test_fail_stale_jobs_only_touches_jobs_that_stopped_making_progress(db):
+    async def body():
+        stranded = await research_db.post_research("stranded")
+        fresh = await research_db.post_research("fresh")
+        await research_db.mark_job_running(stranded)
+        await research_db.mark_job_running(fresh)
+        async with pool_module.pool.connection() as conn:
+            await conn.execute(
+                "UPDATE research_jobs SET started_at = now() - interval '1 day' "
+                "WHERE id = %s",
+                (stranded,),
+            )
+        swept = await research_db.fail_stale_jobs()
+        return (
+            swept,
+            await research_db.get_research(stranded),
+            await research_db.get_research(fresh),
+        )
+
+    swept, stranded, fresh = db(body)
+
+    assert swept == 1
+    assert stranded is not None and stranded["status"] == "failed"
+    assert stranded["error_message"] == "Timed out"
+    assert fresh is not None and fresh["status"] == "running"

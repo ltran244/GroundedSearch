@@ -11,6 +11,13 @@ class Settings(BaseSettings):
     database_port: int
     database_user: str
     database_password: str
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    # How many jobs one worker runs at once, and how long one may take.
+    worker_max_jobs: int = Field(default=2, ge=1)
+    worker_job_timeout_seconds: int = Field(default=600, ge=1)
+    # A job still 'running' this long after it started has lost its worker.
+    stale_job_minutes: int = Field(default=10, ge=1)
     google_api_key: SecretStr | None = None
     brave_search_api_key: SecretStr | None = None
     brave_max_concurrent_requests: int = Field(default=4, ge=1)

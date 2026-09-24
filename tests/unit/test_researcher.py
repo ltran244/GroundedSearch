@@ -6,12 +6,14 @@ import pytest
 
 from app.agents.researcher import run_research
 from app.llm.client import AnswerGenerationError, QueryGenerationError
+from app.llm.models import GeneratedQueries
 from app.search.brave import BraveSearchError
 from app.web.fetcher import FetchError
 
 JOB_ID = uuid4()
 SOURCE_ID = uuid4()
 JOB = {"id": JOB_ID, "query": "question", "status": "running"}
+QUERIES = GeneratedQueries(queries=["a", "b", "c"])
 
 
 def run_with_failure(target: str, error: Exception):
@@ -94,3 +96,33 @@ def test_a_deleted_job_stops_the_pipeline():
             asyncio.run(run_research(JOB_ID))
 
     mark_job_failed.assert_awaited_once_with(JOB_ID, "Unknown error")
+
+
+def test_a_successful_run_saves_content_numbers_and_the_answer():
+    source_id = uuid4()
+    with (
+        patch("app.db.research.mark_job_running"),
+        patch("app.db.research.get_research", return_value=JOB),
+        patch("app.llm.client.get_client"),
+        patch("app.llm.client.generate_search_query", return_value=QUERIES),
+        patch("app.db.research.save_queries"),
+        patch("app.search.brave.search_all", return_value=[]),
+        patch("app.db.sources.save_sources", return_value={"u": source_id}),
+        patch("app.web.fetcher.fetch_pages", return_value={"u": "text"}),
+        patch("app.db.sources.save_contents") as save_contents,
+        patch("app.retrieval.embeddings.embed", return_value=[[0.1]]),
+        patch("app.db.chunks.save_chunks"),
+        patch(
+            "app.retrieval.retriever.retrieve",
+            return_value=[{"source_id": source_id, "content": "text"}],
+        ),
+        patch("app.db.sources.set_citation_numbers") as set_numbers,
+        patch("app.llm.client.generate_answer", return_value="answer [1]"),
+        patch("app.db.research.complete_job") as complete_job,
+    ):
+        asyncio.run(run_research(JOB_ID))
+
+    save_contents.assert_awaited_once_with([(source_id, "text")])
+    # The prompt numbering and the stored numbers come from the same order.
+    set_numbers.assert_awaited_once_with([source_id])
+    complete_job.assert_awaited_once_with(JOB_ID, "answer [1]")

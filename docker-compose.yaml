@@ -17,5 +17,42 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:8-alpine
+    container_name: grounded_search_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT}:6379"
+    # No volume: the queue is transient, and a lost job is a failed job by design.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    container_name: grounded_search_worker
+    restart: unless-stopped
+    environment:
+      # Inside the network the services are reachable by name, not localhost.
+      DATABASE_HOST: db
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_PORT: 5432
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      TEST_DATABASE_NAME: ${TEST_DATABASE_NAME}
+      SERVER_PORT: ${SERVER_PORT}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
+      BRAVE_SEARCH_API_KEY: ${BRAVE_SEARCH_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_data:

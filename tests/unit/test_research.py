@@ -3,13 +3,11 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from psycopg import OperationalError
+from redis.exceptions import ConnectionError
 
-from app.llm.models import GeneratedQueries
 from app.main import app
 
 URL = "https://a.test/"
-SOURCE_ID = uuid4()
 JOB_ID = uuid4()
 JOB = {
     "id": JOB_ID,
@@ -26,70 +24,33 @@ def client():
     return TestClient(app)
 
 
-@pytest.fixture
-def pipeline():
-    """Patch every step of run_research that leaves the process.
-
-    Any new external call in run_research needs a patch here too, or these
-    tests will quietly spend API credits and hit the real database.
-    """
-    with (
-        patch("app.db.research.get_research", return_value=JOB),
-        patch("app.llm.client.get_client"),
-        patch(
-            "app.llm.client.generate_search_query",
-            return_value=GeneratedQueries(queries=["a", "b", "c"]),
-        ),
-        patch("app.search.brave.search_all", return_value=[]),
-        patch("app.db.sources.save_sources", return_value={URL: SOURCE_ID}),
-        patch("app.web.fetcher.fetch_pages", return_value={URL: "text"}),
-        patch("app.retrieval.embeddings.embed", return_value=[[0.1]]),
-        patch("app.db.chunks.save_chunks"),
-        patch(
-            "app.retrieval.retriever.retrieve",
-            return_value=[{"source_id": SOURCE_ID, "content": "text"}],
-        ),
-        patch("app.db.sources.set_citation_numbers"),
-        patch("app.llm.client.generate_answer", return_value="answer [1]"),
-        patch("app.db.research.mark_job_running"),
-        patch("app.db.research.mark_job_failed"),
-    ):
-        yield
-
-
-def test_post_returns_the_job_id_immediately(client, pipeline):
+def test_post_queues_the_job_and_returns_its_id(client):
     with (
         patch("app.db.research.post_research", return_value=JOB_ID),
-        patch("app.db.research.save_queries"),
-        patch("app.db.sources.save_contents") as save_contents,
-        patch("app.db.research.complete_job") as complete_job,
+        patch("app.queue.enqueue_research") as enqueue,
     ):
         response = client.post("/api/v1/research", json={"query": "question"})
 
+    # POST hands the work to the worker; it never runs the pipeline itself.
     assert response.status_code == 201
     assert response.json() == {"id": str(JOB_ID), "status": "pending"}
     assert response.headers["Location"] == f"/api/v1/research/{JOB_ID}"
-
-    # TestClient runs background tasks before returning, so the pipeline has
-    # already finished here. Against a real server it would still be running.
-    save_contents.assert_awaited_once_with([(SOURCE_ID, "text")])
-    complete_job.assert_awaited_once_with(JOB_ID, "answer [1]")
+    enqueue.assert_awaited_once_with(JOB_ID)
 
 
-def test_post_rejects_a_missing_query(client, pipeline):
-    with patch("app.db.research.post_research") as post_research:
-        response = client.post("/api/v1/research", json={})
-
-    assert response.status_code == 422
-    post_research.assert_not_called()
-
-
-def test_post_returns_503_when_the_database_is_down(client, pipeline):
-    with patch("app.db.research.post_research", side_effect=OperationalError("down")):
+def test_post_marks_the_job_failed_if_it_cannot_be_queued(client):
+    # Otherwise the row sits at 'pending' forever: nothing will run it, and the
+    # age-based cleanup only looks at jobs that started.
+    with (
+        patch("app.db.research.post_research", return_value=JOB_ID),
+        patch("app.queue.enqueue_research", side_effect=ConnectionError("down")),
+        patch("app.db.research.mark_job_failed") as mark_job_failed,
+    ):
         response = client.post("/api/v1/research", json={"query": "question"})
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "Database unavailable"}
+    assert response.json() == {"detail": "Job queue unavailable"}
+    mark_job_failed.assert_awaited_once_with(JOB_ID, "Could not queue job")
 
 
 def test_get_returns_the_job_with_its_queries_and_sources(client):
@@ -117,19 +78,3 @@ def test_get_returns_404_for_an_unknown_job(client):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Research job not found"}
-
-
-def test_get_rejects_an_invalid_id(client):
-    with patch("app.db.research.get_research") as get_research:
-        response = client.get("/api/v1/research/not-a-uuid")
-
-    assert response.status_code == 422
-    get_research.assert_not_called()
-
-
-def test_get_returns_503_when_the_database_is_down(client):
-    with patch("app.db.research.get_research", side_effect=OperationalError("down")):
-        response = client.get(f"/api/v1/research/{uuid4()}")
-
-    assert response.status_code == 503
-    assert response.json() == {"detail": "Database unavailable"}

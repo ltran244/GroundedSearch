@@ -12,11 +12,7 @@ class SearchResult(BaseModel):
 
 
 class QueryResults(BaseModel):
-    """What one search query found, in Brave's rank order.
-
-    Kept grouped by query so every source can be traced back to the search
-    that found it. Flattening is easy later; the link can't be recovered.
-    """
+    """What one search query found, in Brave's rank order."""
 
     query: str
     results: list[SearchResult] = Field(default_factory=list)
@@ -27,11 +23,6 @@ class BraveWebResults(BaseModel):
 
 
 class BraveSearchResponse(BaseModel):
-    """The parts of a GET web/search response we read.
-
-    Brave returns many other top-level sections (news, videos, discussions...);
-    Pydantic ignores fields that aren't declared, so only `web` is parsed.
-    `web` is missing entirely when a query has no web results.
-    """
+    """The parts of a GET web/search response needed."""
 
     web: BraveWebResults | None = None

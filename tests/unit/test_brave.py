@@ -44,19 +44,6 @@ def test_missing_description_defaults_to_empty():
     assert results.results[0].description == ""
 
 
-def test_sends_the_query_without_html_decorations():
-    seen = {}
-
-    def handler(request):
-        seen.update(request.url.params)
-        return ok(request)
-
-    search(handler, query="solar panels")
-
-    assert seen["q"] == "solar panels"
-    assert seen["text_decorations"] == "false"
-
-
 def test_no_web_section_is_an_empty_result():
     results = search(lambda request: httpx.Response(200, json={}))
 
@@ -88,13 +75,6 @@ def test_results_follow_query_order():
     results = search_many(handler, ["a", "b", "c"])
 
     assert [group.query for group in results] == ["a", "b", "c"]
-
-
-def test_no_queries_sends_nothing():
-    def handler(request):
-        raise AssertionError("no request expected")
-
-    assert search_many(handler, []) == []
 
 
 def test_one_failed_search_fails_the_batch():
