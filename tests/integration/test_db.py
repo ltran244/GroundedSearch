@@ -91,39 +91,33 @@ def test_a_url_found_by_two_queries_is_stored_once(db):
     assert sorted(source["url"] for source in sources) == ["u1", "u2"]
 
 
-def test_save_contents_numbers_sources_by_position(db):
+def test_citation_numbers_follow_the_order_they_are_given(db):
     async def body():
         job_id = await research_db.post_research("question")
         await research_db.save_queries(job_id, ["a"])
-        source_ids = await sources_db.save_sources(job_id, results(("a", ["u1", "u2"])))
-        # u2 first, so it becomes [1] regardless of insertion order.
-        await sources_db.save_contents(
-            [(source_ids["u2"], "text two"), (source_ids["u1"], "text one")]
-        )
+        ids = await sources_db.save_sources(job_id, results(("a", ["u1", "u2"])))
+        await sources_db.save_contents([(ids["u1"], "one"), (ids["u2"], "two")])
+        # u2 first, so it becomes [1] whatever order the rows were inserted in.
+        await sources_db.set_citation_numbers([ids["u2"], ids["u1"]])
         return await sources_db.get_sources(job_id)
 
     sources = db(body)
 
-    assert [(source["number"], source["url"]) for source in sources] == [
-        (1, "u2"),
-        (2, "u1"),
-    ]
+    assert [(s["number"], s["url"]) for s in sources] == [(1, "u2"), (2, "u1")]
 
 
-def test_sources_without_content_come_last_without_a_number(db):
+def test_sources_left_out_of_the_answer_have_no_number(db):
     async def body():
         job_id = await research_db.post_research("question")
         await research_db.save_queries(job_id, ["a"])
-        source_ids = await sources_db.save_sources(job_id, results(("a", ["u1", "u2"])))
-        await sources_db.save_contents([(source_ids["u2"], "text")])
+        ids = await sources_db.save_sources(job_id, results(("a", ["u1", "u2"])))
+        await sources_db.save_contents([(ids["u1"], "one"), (ids["u2"], "two")])
+        await sources_db.set_citation_numbers([ids["u2"]])
         return await sources_db.get_sources(job_id)
 
     sources = db(body)
 
-    assert [(source["number"], source["url"]) for source in sources] == [
-        (1, "u2"),
-        (None, "u1"),
-    ]
+    assert [(s["number"], s["url"]) for s in sources] == [(1, "u2"), (None, "u1")]
 
 
 def test_complete_job_saves_the_answer(db):

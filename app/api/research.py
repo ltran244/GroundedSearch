@@ -1,8 +1,8 @@
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 
 import app.db.research as research_db
 import app.db.sources as sources_db
@@ -17,7 +17,7 @@ research_router = APIRouter(
 
 
 class ResearchRequest(BaseModel):
-    query: str
+    query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 JobStatus = Literal["pending", "running", "completed", "failed"]
@@ -46,7 +46,6 @@ class ResearchResponse(BaseModel):
     # can show the searches, then the sources, then the answer.
     search_queries: list[str] = []
     sources: list[SourceResponse] = []
-
 
 
 class ResearchCreated(BaseModel):

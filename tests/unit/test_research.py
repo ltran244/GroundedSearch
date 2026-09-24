@@ -43,6 +43,13 @@ def pipeline():
         patch("app.search.brave.search_all", return_value=[]),
         patch("app.db.sources.save_sources", return_value={URL: SOURCE_ID}),
         patch("app.web.fetcher.fetch_pages", return_value={URL: "text"}),
+        patch("app.retrieval.embeddings.embed", return_value=[[0.1]]),
+        patch("app.db.chunks.save_chunks"),
+        patch(
+            "app.retrieval.retriever.retrieve",
+            return_value=[{"source_id": SOURCE_ID, "content": "text"}],
+        ),
+        patch("app.db.sources.set_citation_numbers"),
         patch("app.llm.client.generate_answer", return_value="answer [1]"),
         patch("app.db.research.mark_job_running"),
         patch("app.db.research.mark_job_failed"),

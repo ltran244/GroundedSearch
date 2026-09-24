@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     brave_results_per_query: int = Field(default=5, ge=1, le=20)
     llm_model: str = "gemini-3.5-flash-lite"
     llm_max_concurrent_requests: int = Field(default=4, ge=1)
+    embedding_model: str = "gemini-embedding-001"
+    # Must match the vector(...) size in the chunks migration. Changing it
+    # means re-embedding everything.
+    embedding_dimensions: int = Field(default=768, ge=1, le=2000)
+    # Retrieve more chunks than the answer needs, so the per-source cap has
+    # something to drop.
+    retrieval_candidates: int = Field(default=20, ge=1)
+    retrieval_chunks: int = Field(default=10, ge=1)
+    retrieval_chunks_per_source: int = Field(default=3, ge=1)
     # To load environment variables from the .env file
     model_config = SettingsConfigDict(env_file=".env")
 

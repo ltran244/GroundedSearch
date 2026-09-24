@@ -54,25 +54,40 @@ async def save_sources(job_id: UUID, results: list[QueryResults]) -> dict[str, U
 
 
 async def save_contents(sources: list[tuple[UUID, str]]) -> None:
-    """Store text and citation numbers for sources."""
+    """Store the extracted text of readable sources, all of them or none.
+    """
+    if not sources:
+        return
     async with pool_module.pool.connection(timeout=2) as conn:
         async with conn.cursor() as cursor:
             await cursor.executemany(
                 """
                 UPDATE sources
-                SET content = %s, citation_number = %s, retrieved_at = now()
+                SET content = %s, retrieved_at = now()
                 WHERE id = %s
                 """,
+                [(text, source_id) for source_id, text in sources],
+            )
+
+
+async def set_citation_numbers(source_ids: list[UUID]) -> None:
+    """Number the sources that went into the answer prompt, 1-based.
+    """
+    if not source_ids:
+        return
+    async with pool_module.pool.connection(timeout=2) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.executemany(
+                "UPDATE sources SET citation_number = %s WHERE id = %s",
                 [
-                    (text, number, source_id)
-                    for number, (source_id, text) in enumerate(sources, start=1)
+                    (number, source_id)
+                    for number, source_id in enumerate(source_ids, start=1)
                 ],
             )
 
 
 async def get_sources(job_id: UUID) -> list[dict[str, Any]]:
-    """A job's sources, cited ones first in citation order.
-    """
+    """A job's sources, cited ones first in citation order."""
     async with pool_module.pool.connection(timeout=2) as conn:
         async with conn.cursor(row_factory=dict_row) as cursor:
             await cursor.execute(

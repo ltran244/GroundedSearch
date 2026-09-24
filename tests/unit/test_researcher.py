@@ -10,6 +10,7 @@ from app.search.brave import BraveSearchError
 from app.web.fetcher import FetchError
 
 JOB_ID = uuid4()
+SOURCE_ID = uuid4()
 JOB = {"id": JOB_ID, "query": "question", "status": "running"}
 
 
@@ -26,9 +27,16 @@ def run_with_failure(target: str, error: Exception):
         patch("app.llm.client.generate_search_query"),
         patch("app.db.research.save_queries"),
         patch("app.search.brave.search_all", return_value=[]),
-        patch("app.db.sources.save_sources", return_value={"u": uuid4()}),
+        patch("app.db.sources.save_sources", return_value={"u": SOURCE_ID}),
         patch("app.web.fetcher.fetch_pages", return_value={"u": "text"}),
         patch("app.db.sources.save_contents"),
+        patch("app.retrieval.embeddings.embed", return_value=[[0.1]]),
+        patch("app.db.chunks.save_chunks"),
+        patch(
+            "app.retrieval.retriever.retrieve",
+            return_value=[{"source_id": SOURCE_ID, "content": "text"}],
+        ),
+        patch("app.db.sources.set_citation_numbers"),
         patch("app.llm.client.generate_answer", return_value="answer"),
         patch("app.db.research.complete_job"),
         patch("app.db.research.mark_job_failed") as mark_job_failed,

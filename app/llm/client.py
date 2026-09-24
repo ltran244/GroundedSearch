@@ -1,4 +1,5 @@
 from google import genai
+from pydantic import ValidationError
 
 from app.config import settings
 from app.llm.models import AnswerSource, GeneratedQueries
@@ -31,21 +32,27 @@ async def check_gemini() -> None:
 
 
 async def generate_search_query(client: genai.Client, query: str) -> GeneratedQueries:
-    interaction = await client.aio.interactions.create(
-        model=settings.llm_model,
-        input=query,
-        system_instruction=QUERY_GENERATION_PROMPT,
-        response_format={
-            "type": "text",
-            "mime_type": "application/json",
-            "schema": GeneratedQueries.model_json_schema(),
-        },
-        stream=False,
-    )
+    try:
+        interaction = await client.aio.interactions.create(
+            model=settings.llm_model,
+            input=query,
+            system_instruction=QUERY_GENERATION_PROMPT,
+            response_format={
+                "type": "text",
+                "mime_type": "application/json",
+                "schema": GeneratedQueries.model_json_schema(),
+            },
+            stream=False,
+        )
+    except Exception as exc:
+        raise QueryGenerationError("Gemini query generation request failed") from exc
     output_text = interaction.output_text  # pyright: ignore[reportAttributeAccessIssue]
     if not output_text:
         raise QueryGenerationError("Gemini returned no search queries")
-    generated = GeneratedQueries.model_validate_json(output_text)
+    try:
+        generated = GeneratedQueries.model_validate_json(output_text)
+    except ValidationError as exc:
+        raise QueryGenerationError("Gemini returned invalid search queries") from exc
     # drop duplicates and blanks queries
     seen: set[str] = set()
     unique: list[str] = []
@@ -70,8 +77,7 @@ class AnswerGenerationError(RuntimeError):
 async def generate_answer(
     client: genai.Client, question: str, sources: list[AnswerSource]
 ) -> str:
-    """Write an answer to the question from the extracted sources.
-    """
+    """Write an answer to the question from the extracted sources."""
     if not sources:
         raise AnswerGenerationError("Cannot generate an answer without sources")
 
@@ -81,12 +87,15 @@ async def generate_answer(
     )
     prompt_input = f"Question: {question}\n\nSources:\n{numbered_sources}"
 
-    interaction = await client.aio.interactions.create(
-        model=settings.llm_model,
-        input=prompt_input,
-        system_instruction=ANSWER_GENERATION_PROMPT,
-        stream=False,
-    )
+    try:
+        interaction = await client.aio.interactions.create(
+            model=settings.llm_model,
+            input=prompt_input,
+            system_instruction=ANSWER_GENERATION_PROMPT,
+            stream=False,
+        )
+    except Exception as exc:
+        raise AnswerGenerationError("Gemini answer generation request failed") from exc
     answer = interaction.output_text  # pyright: ignore[reportAttributeAccessIssue]
     if not answer or not answer.strip():
         raise AnswerGenerationError("Gemini returned no answer")
