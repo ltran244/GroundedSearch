@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from psycopg import connect, sql
 from psycopg_pool import AsyncConnectionPool
 
+import app.api.health as health_module
 import app.db.pool as pool_module
 import app.main as main_module
 from app.config import settings
@@ -83,6 +84,10 @@ def integration_pool(monkeypatch, clean_test_database):
     monkeypatch.setattr(main_module, "pool", pool)
     # The startup check would otherwise call Google on every integration test.
     monkeypatch.setattr(main_module, "check_gemini", AsyncMock())
+    # These tests are about the database. Redis is not needed for them, and CI
+    # runs them without it, so /readyz's queue check stands in.
+    monkeypatch.setattr(main_module, "check_queue", AsyncMock())
+    monkeypatch.setattr(health_module, "check_queue", AsyncMock())
     # Opened and closed by the app's lifespan, inside TestClient's event loop:
     # an async pool can only be used from the loop that opened it.
     yield pool
